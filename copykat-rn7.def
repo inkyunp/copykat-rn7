@@ -1,0 +1,92 @@
+Bootstrap: docker
+From: rocker/r-ver:4.2.2
+
+# Lightweight, CopyKAT-only image for the rat (genome="rn7") fork.
+# Base rocker/r-ver:4.2.2 already ships a compiled R 4.2.2 (Ubuntu 22.04 jammy),
+# so no R source build is needed. We install ONLY CopyKAT's runtime
+# dependencies from a pinned CRAN snapshot, then install the vendored fork
+# (copykat-rn7) which bakes full.anno.rn7 into R/sysdata.rda.
+#
+# Excluded on purpose (vs the full Rocky9 CNV toolkit): infercnv, numbat,
+# scATOMIC, Seurat, JAGS/rjags, cellSNP/Eagle/samtools/bcftools.
+
+%files
+    copykat-rn7 /opt/src/copykat-rn7
+    tests/t2_synthetic_rn7.R /opt/tests/t2_synthetic_rn7.R
+
+%labels
+    org.opencontainers.image.title CopyKAT rat (rn7) fork runtime
+    org.opencontainers.image.description Minimal R 4.2.2 image with copykat 1.1.0 patched for rat mRatBN7.2 gene-space CNV (genome="rn7")
+    org.opencontainers.image.base.name docker.io/rocker/r-ver:4.2.2
+    org.opencontainers.image.r.version 4.2.2
+    org.opencontainers.image.copykat.upstream copykat 1.1.0 commit b795ff793522499f814f6ae282aad1aab790902f
+
+%environment
+    export R_ENVIRON_USER=/dev/null
+    export R_PROFILE_USER=/dev/null
+    export LANG=C.UTF-8
+    export LC_ALL=C.UTF-8
+
+%post
+    set -euxo pipefail
+    umask 022
+
+    # Pin to the same CRAN snapshot date used by the existing Rocky9 CNV image.
+    CRAN_SNAPSHOT='https://packagemanager.posit.co/cran/__linux__/jammy/2023-10-01'
+    JOBS="$(nproc 2>/dev/null || echo 2)"; if [ "$JOBS" -gt 8 ]; then JOBS=8; fi
+
+    # System build/runtime libraries for CopyKAT's compiled dependencies
+    # (parallelDist -> RcppArmadillo, MCMCpack, mixtools, gplots, dlm).
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        build-essential gfortran \
+        libblas-dev liblapack-dev \
+        libcurl4-openssl-dev libssl-dev libxml2-dev \
+        libgsl-dev \
+        ca-certificates
+    rm -rf /var/lib/apt/lists/*
+
+    mkdir -p /opt/tests /opt/manifest /data
+
+    # Install CopyKAT runtime dependencies from the pinned snapshot. Transitive
+    # dependencies (Rcpp, RcppArmadillo, coda, MASS, mcmc, quantreg, gtools,
+    # caTools, bitops, segmented, kernlab, survival, ...) resolve automatically.
+    Rscript --vanilla -e "options(repos = c(CRAN = '${CRAN_SNAPSHOT}'), Ncpus = ${JOBS}, timeout = 3600, warn = 2); pkgs <- c('parallelDist','dlm','gplots','RColorBrewer','mixtools','cluster','MCMCpack'); install.packages(pkgs); for (p in pkgs) if (!requireNamespace(p, quietly = TRUE)) stop(paste('missing dependency:', p)); cat('dependency install OK\n')"
+
+    # Install the vendored rat fork (source tree with baked R/sysdata.rda).
+    R CMD INSTALL --with-keep.source /opt/src/copykat-rn7
+
+    # Provenance
+    Rscript --vanilla -e "ip <- as.data.frame(installed.packages()[, c('Package','Version')]); write.table(ip[order(ip[['Package']]), ], '/opt/manifest/r-packages.tsv', sep='\t', quote=FALSE, row.names=FALSE)"
+    {
+      printf 'built_utc\t%s\n' "$(date -u +%FT%TZ)"
+      printf 'base_image\trocker/r-ver:4.2.2\n'
+      printf 'copykat_upstream_commit\tb795ff793522499f814f6ae282aad1aab790902f\n'
+      printf 'copykat_fork_version\t%s\n' "$(Rscript --vanilla -e 'cat(as.character(packageVersion("copykat")))')"
+      printf 'cran_snapshot\t%s\n' "${CRAN_SNAPSHOT}"
+    } > /opt/manifest/build-info.tsv
+
+    # In-image acceptance: rn7 API present + full.anno.rn7 baked + integrity.
+    Rscript --vanilla -e "suppressPackageStartupMessages(library(copykat)); stopifnot('annotateGenes.rn7' %in% getNamespaceExports('copykat')); stopifnot(as.character(formals(copykat)[['genome']]) == 'hg20'); fa <- get('full.anno.rn7', asNamespace('copykat')); stopifnot(is.data.frame(fa), identical(colnames(fa), c('abspos','chromosome_name','start_position','end_position','ensembl_gene_id','mgi_symbol','band')), length(unique(fa[['abspos']])) > 20, length(unique(fa[['chromosome_name']])) == 21); cat('in-image rn7 checks OK: genes =', nrow(fa), 'unique abspos =', length(unique(fa[['abspos']])), '\n')"
+
+%test
+    set -eux
+    test "$(Rscript --vanilla -e 'cat(as.character(getRversion()))')" = 4.2.2
+    test "$(Rscript --vanilla -e 'cat(as.character(packageVersion("copykat")))')" = 1.1.0.9001
+    Rscript --vanilla -e 'suppressPackageStartupMessages(library(copykat)); stopifnot("annotateGenes.rn7" %in% getNamespaceExports("copykat")); b <- paste(deparse(body(copykat)), collapse="\n"); stopifnot(grepl("annotateGenes.rn7", b), grepl("rn7", b)); cat("rn7 API + code path present\n")'
+    # Full synthetic rn7 run using the installed package's own sources.
+    Rscript --vanilla -e "src <- file.path(system.file('R', package='copykat'), 'copykat'); e <- new.env(); lazyLoad(src, envir=e); saveRDS(NULL, tempfile())" || true
+    Rscript --vanilla /opt/tests/t2_synthetic_rn7.R \
+      /opt/src/copykat-rn7/R/copykat.R \
+      /opt/src/copykat-rn7/R/sysdata.rda \
+      /tmp/t2out
+
+%runscript
+    exec Rscript "$@"
+
+%help
+    Minimal CopyKAT rat (genome="rn7") runtime, R 4.2.2.
+    Run:  singularity exec --cleanenv --containall IMAGE.sif \
+            Rscript /work/run_copykat_rat.R --input /work/sample.rds ...
+    full.anno.rn7 (mRatBN7.2) is baked into the copykat namespace; no GTF needed at runtime.

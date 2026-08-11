@@ -1,0 +1,17 @@
+# Build artifacts / images
+*.sif
+*.sif.sha256
+build.log
+
+# Real customer / order data and run outputs (never publish)
+t3_out_*/
+input_validation_report.*.tsv
+*_result.rds
+*.cnv_evidence.tsv
+rat_copykat_*_test_*.rds
+norm_cell_names*.txt
+
+# R build leftovers
+*.Rcheck/
+.Rhistory
+.RData

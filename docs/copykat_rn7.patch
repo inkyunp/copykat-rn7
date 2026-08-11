@@ -1,0 +1,53 @@
+--- a/copykat/R/copykat.R	2026-08-11 14:42:38.780529418 +0900
++++ b/copykat/R/copykat.R	2026-08-11 14:12:05.584416800 +0900
+@@ -40,6 +40,9 @@
+   } else if(genome=="mm10"){
+   anno.mat <- annotateGenes.mm10(mat = rawmat, ID.type = id.type) #SYMBOL or ENSEMBLE
+   dim(rawmat)
++  } else if(genome=="rn7"){
++  anno.mat <- annotateGenes.rn7(mat = rawmat, ID.type = id.type) #SYMBOL or ENSEMBLE (rat mRatBN7.2)
++  dim(rawmat)
+   }
+   anno.mat <- anno.mat[order(as.numeric(anno.mat$abspos), decreasing = FALSE),]
+ 
+@@ -558,7 +561,7 @@
+ 
+   }
+ 
+-  if(genome=="mm10") {
++  if(genome=="mm10" || genome=="rn7") {
+     uber.mat.adj <- data.matrix(results.com)
+     dim(uber.mat.adj)
+     if(distance=="euclidean"){
+@@ -1534,3 +1537,31 @@
+         high = retval$breaks[-1], color = retval$col)
+     invisible(retval)
+ }
++
++
++annotateGenes.rn7 <- 
++function(mat, ID.type="S", full.anno=full.anno.rn7){
++  print("start annotation ...")
++
++  if(substring(ID.type,1,1) %in% c("E", "e")){
++    shar <- intersect(rownames(mat), full.anno$ensembl_gene_id)
++    mat <- mat[which(rownames(mat) %in% shar),]
++    anno <- full.anno[which(as.vector(full.anno$ensembl_gene_id) %in% shar),]
++    anno <- anno[!duplicated(anno$mgi_symbol),]
++    anno <- anno[order(match(anno$ensembl_gene_id, rownames(mat))),]
++    data <- cbind(anno, mat)
++
++  }else if(substring(ID.type,1,1) %in% c("S", "s")) {
++
++    shar <- intersect(rownames(mat), full.anno$mgi_symbol)
++    rownames(mat)[1:10]
++    full.anno$mgi_symbol[]
++
++    mat <- mat[which(rownames(mat) %in% shar),]
++    anno <- full.anno[which(as.vector(full.anno$mgi_symbol) %in% shar),]
++    anno <- anno[!duplicated(anno$mgi_symbol),]
++    anno <- anno[order(match(anno$mgi_symbol, rownames(mat))),]
++    data <- cbind(anno, mat)
++  }
++}
++
