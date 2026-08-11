@@ -1,150 +1,157 @@
 # CopyKAT rat (genome="rn7") fork + test image
 
-CopyKAT을 rat(*Rattus norvegicus*, **mRatBN7.2**) scRNA-seq에 실제로 돌리기 위한
-포크와 전용 경량 테스트 이미지다. CopyKAT의 mouse(mm10) gene-space 경로(220kb bin
-변환 없음)를 그대로 상속받아 `genome="rn7"` 값을 추가하고, 이 폴더 상위의
-`genes.gtf`로 만든 rat annotation table을 패키지에 baking했다.
+A fork and dedicated lightweight image for running CopyKAT on rat
+(*Rattus norvegicus*, **mRatBN7.2**) scRNA-seq. It inherits CopyKAT's mouse (mm10)
+gene-space path (no 220kb bin conversion), adds a `genome="rn7"` value, and bakes a
+rat annotation table — built from the `genes.gtf` in the parent folder — into the
+package.
 
-> 결과는 **후보 CNV 증거**일 뿐이며 최종 malignant/normal 진단이 아니다.
-> 저자조차 충분히 검증하지 않은 mouse 코드 경로를 타므로, DNA 레벨 근거
-> (WGS/SNP-array/karyotype) 교차검증 전까지 모든 결과는 `review_required`다.
+> Results are **candidate CNV evidence** only, not a final malignant/normal
+> diagnosis. They run through a mouse code path the upstream author did not
+> extensively validate, so every result stays `review_required` until cross-checked
+> against DNA-level evidence (WGS/SNP-array/karyotype).
 
-## 무엇을 · 어떻게 · 무엇이 다른지
+## What / How / What differs
 
-### 왜 필요한가 (문제)
-upstream CopyKAT `copykat()`의 `genome` 인자는 `"hg20"`(human)과 `"mm10"`(mouse) **두 값만**
-분기하고 `else`가 없다. rat 값을 그대로 넣으면 어느 분기에도 걸리지 않아 `anno.mat`이
-만들어지지 않고 다음 줄에서 곧바로 죽는다. rat scRNA-seq에 CopyKAT을 쓰려면 코드 경로 자체가
-없었다.
+### Why it is needed (problem)
+Upstream CopyKAT `copykat()` branches its `genome` argument on **only** `"hg20"`
+(human) and `"mm10"` (mouse), with no `else`. Passing a rat value matches neither
+branch, so `anno.mat` is never created and the next line dies immediately. There was
+simply no code path for running CopyKAT on rat scRNA-seq.
 
-### 무엇을 했나 (접근)
-처음부터 rat 전용 220kb bin 좌표계를 새로 만드는 대신, **mouse(mm10) 다운스트림 경로를 그대로
-재사용**했다. mm10 경로는 220kb bin 변환 없이 gene-space로 결과를 내는 구조라, rat annotation
-테이블 하나만 주입하면 되기 때문이다. 그래서 `genome="rn7"`(rat mRatBN7.2)이 mm10과 동일한
-gene-space 블록을 타도록 최소 변경만 했다.
+### What was done (approach)
+Instead of building a rat-specific 220kb bin coordinate system from scratch, this fork
+**reuses the mouse (mm10) downstream path**. The mm10 path produces results in
+gene-space without a 220kb bin conversion, so only a single rat annotation table needs
+to be injected. Thus `genome="rn7"` (rat mRatBN7.2) is made to follow the same
+gene-space block as mm10 with minimal changes.
 
-### 어떻게 했나 (구현)
-1. mRatBN7.2 GTF에서 CopyKAT 스키마(7컬럼) rat annotation `full.anno.rn7`을 생성.
-2. `copykat()`에 `genome=="rn7"` 분기와 `annotateGenes.rn7()`를 추가하고, mm10 gene-space 블록을 rn7도 통과하도록 한 줄 확장.
-3. `full.anno.rn7`을 패키지 `R/sysdata.rda`에 baking → 런타임에 GTF·gene order 파일 불필요.
-4. copykat 전용 경량 이미지(`rocker/r-ver:4.2.2`)로 패키징하고, 합성 데이터·실데이터로 실행 검증.
+### How it was done (implementation)
+1. Generate a CopyKAT-schema (7-column) rat annotation `full.anno.rn7` from the mRatBN7.2 GTF.
+2. Add a `genome=="rn7"` branch and `annotateGenes.rn7()` to `copykat()`, and widen the mm10 gene-space block by one line so rn7 passes through it too.
+3. Bake `full.anno.rn7` into the package `R/sysdata.rda`, so no GTF or gene-order file is needed at runtime.
+4. Package it into a copykat-only lightweight image (`rocker/r-ver:4.2.2`) and validate with synthetic and real data.
 
-### upstream과 무엇이 다른가
+### What differs from upstream
 
-| 항목 | upstream copykat 1.1.0 | 이 포크 (rn7) |
+| Item | upstream copykat 1.1.0 | This fork (rn7) |
 | --- | --- | --- |
-| 지원 종 | human(hg20), mouse(mm10) | **+ rat(rn7, mRatBN7.2)** |
-| `genome` 미지원 값 | `else` 없음 → 에러로 죽음 | rn7 분기 추가 |
-| rat annotation | 없음 | `full.anno.rn7` 패키지에 baked |
-| annotation 함수 | `annotateGenes.hg20/.mm10` | `+ annotateGenes.rn7()` |
-| rat 출력 단위 | (불가) | gene-space (`CNA_results.txt`, mm10과 동일) |
-| hg20 전용 단계 | 변경 없음 | **변경 없음** (HLA/cyclegene 제거·220kb bin은 hg20 게이트라 손대지 않음) |
-| 알고리즘 로직 | — | **변경 없음** (필터·smoothing·baseline·MCMC segmentation 원본 그대로) |
+| Supported species | human (hg20), mouse (mm10) | **+ rat (rn7, mRatBN7.2)** |
+| Unsupported `genome` value | no `else` → dies with an error | rn7 branch added |
+| Rat annotation | none | `full.anno.rn7` baked into the package |
+| Annotation function | `annotateGenes.hg20/.mm10` | `+ annotateGenes.rn7()` |
+| Rat output unit | (not possible) | gene-space (`CNA_results.txt`, same as mm10) |
+| hg20-only steps | unchanged | **unchanged** (HLA/cyclegene removal and 220kb bin are hg20-gated, so left untouched) |
+| Algorithm logic | — | **unchanged** (filtering, smoothing, baseline, MCMC segmentation are the original) |
 
-> 코드 변경은 정확히 **3곳(+데이터 1개)** 뿐이다. 전체 diff와 복원한 원본은
-> [`docs/MODIFICATIONS.md`](docs/MODIFICATIONS.md), [`docs/copykat_rn7.patch`](docs/copykat_rn7.patch),
-> [`docs/original_copykat_b795ff7.R`](docs/original_copykat_b795ff7.R) 참조.
+> The code change is exactly **3 edits (+1 data object)**. For the full diff and the
+> restored original, see [`docs/MODIFICATIONS.md`](docs/MODIFICATIONS.md),
+> [`docs/copykat_rn7.patch`](docs/copykat_rn7.patch), and
+> [`docs/original_copykat_b795ff7.R`](docs/original_copykat_b795ff7.R).
 
-### 검증 상태 (실행으로 확인됨)
-- **빌드**: `copykat-rn7.sif` 빌드 성공, 인이미지 rn7 체크 + `%test` 합성 실행 PASS, 오프라인(`--network none`) 실행 PASS.
-- **T2 합성**: 실제 R 4.2.2 + 실제 deps로 `copykat(genome="rn7")` 완주, gene-space 출력·리터럴 클래스 확인.
-- **실데이터**: rat 310셀(폐, epithelial)에서 완주 — 정상 baseline(macrophage)은 대부분 diploid, epithelial은 aneuploid 비율 상승. 결과는 `review_required`.
+### Validation status (verified by execution)
+- **Build**: `copykat-rn7.sif` builds successfully; in-image rn7 checks + the `%test` synthetic run PASS; offline (`--network none`) run PASSes.
+- **T2 synthetic**: `copykat(genome="rn7")` runs to completion on real R 4.2.2 + real deps, producing gene-space output and preserving literal classes.
+- **Real data**: runs to completion on rat 310 cells (lung, epithelial) — the normal baseline (macrophage) is mostly diploid and epithelial cells show a higher aneuploid fraction. Results are `review_required`.
 
-## 입력 계약 (copykat 1.1.0 소스로 확정)
-CopyKAT은 세포/유전자 필터를 **양성 카운트 검출(`sum(x>0)`)** 로 하고, 내부에서
-`log(sqrt(x)+sqrt(x+1))` 변환·중심화·dlm 스무딩을 **직접** 수행한다. 따라서 입력은
-반드시 **raw integer UMI counts, genes × cells** 여야 한다.
+## Input contract (confirmed from copykat 1.1.0 source)
+CopyKAT filters cells/genes by **positive-count detection (`sum(x>0)`)** and internally
+performs its own `log(sqrt(x)+sqrt(x+1))` transform, centering, and dlm smoothing.
+Therefore the input must be **raw integer UMI counts, genes × cells**.
 
 - Seurat v4: `GetAssayData(obj, assay="RNA", slot="counts")`
 - Seurat v5: `LayerData(obj, assay="RNA", layer="counts")`
-- **금지**: log-normalized `data`(이중 변환 → 신호 소실), `scale.data`(음수 → `sqrt(음수)=NaN`), SCT/integrated assay
-- 유전자를 variable features로 줄이지 말 것(genome-wide 커버리지 필요)
-- `norm.cell.names`(선택, 권장): 정상 세포 barcode 벡터로 raw matrix의 colnames와 문자 그대로 일치해야 함
+- **Forbidden**: log-normalized `data` (double transform → signal loss), `scale.data` (negatives → `sqrt(negative)=NaN`), SCT/integrated assays
+- Do not reduce genes to variable features (genome-wide coverage is required)
+- `norm.cell.names` (optional, recommended): a normal-cell barcode vector that must match the raw matrix column names verbatim
 
-## 파일
-| 파일 | 용도 |
+## Files
+| File | Purpose |
 | --- | --- |
-| `build_full_anno_rn7.R` | `../genes.gtf`(mRatBN7.2)에서 7컬럼 `full.anno.rn7` 생성 → `full.anno.rn7.rds` + 무결성 게이트 |
-| `full.anno.rn7.rds` | 생성된 rat annotation (25,302 genes, 21 chromosome labels) |
-| `copykat-rn7/` | 포크 소스 트리 (copykat 1.1.0, commit `b795ff7` 기반). `full.anno.rn7`을 `R/sysdata.rda`에 baking |
-| `copykat-rn7.def` | 경량 Singularity 정의 (`rocker/r-ver:4.2.2`, copykat 전용) |
-| `build.sh` / `validate.sh` | 이미지 빌드(fakeroot/네트워크 1회) / 무권한 오프라인 검증 |
-| `validate_rat_input.R` | **데이터 검증 게이트** (입력 계약 5항목). 큰 머신/로컬 공용 |
-| `run_copykat_rat.R` | 러너: RNA counts 추출 → `copykat(..., genome="rn7")` → 후보 증거 저장 |
-| `tests/t2_synthetic_rn7.R` | 합성 스모크 테스트 (RDS 불필요) |
+| `build_full_anno_rn7.R` | Generate the 7-column `full.anno.rn7` from `../genes.gtf` (mRatBN7.2) → `full.anno.rn7.rds` + integrity gate |
+| `full.anno.rn7.rds` | Generated rat annotation (25,302 genes, 21 chromosome labels) |
+| `copykat-rn7/` | Fork source tree (based on copykat 1.1.0, commit `b795ff7`). Bakes `full.anno.rn7` into `R/sysdata.rda` |
+| `copykat-rn7.def` | Lightweight Singularity definition (`rocker/r-ver:4.2.2`, copykat-only) |
+| `build.sh` / `validate.sh` | Build the image (fakeroot/network once) / unprivileged offline validation |
+| `validate_rat_input.R` | **Data-validation gate** (5 input-contract checks). Shared by big machine / local |
+| `run_copykat_rat.R` | Runner: extract RNA counts → `copykat(..., genome="rn7")` → save candidate evidence |
+| `run_copykat.R` | Base-R runner mirroring the inferCNV pipeline (no Seurat in the image; direct slot access) |
+| `tests/t2_synthetic_rn7.R` | Synthetic smoke test (no RDS needed) |
 
-## 포크가 바꾼 것 (upstream 대비 정확히 3곳)
-1. annotation 분기에 `else if(genome=="rn7") anno.mat <- annotateGenes.rn7(...)` 추가
-2. `annotateGenes.rn7()` 신규 = `annotateGenes.mm10()` 복사본, 기본값 `full.anno=full.anno.rn7`
-3. 후반 gene-space 블록 `if(genome=="mm10")` → `if(genome=="mm10" || genome=="rn7")`
+## Modifications the fork makes (exactly 3 vs upstream)
+1. Add `else if(genome=="rn7") anno.mat <- annotateGenes.rn7(...)` to the annotation branch
+2. New `annotateGenes.rn7()` = a copy of `annotateGenes.mm10()` with default `full.anno=full.anno.rn7`
+3. Widen the later gene-space block `if(genome=="mm10")` → `if(genome=="mm10" || genome=="rn7")`
 
-hg20 전용 단계(HLA/cyclegene 제거, 220kb bin 변환)는 이미 `genome=="hg20"`로만 게이트되어
-있어 손대지 않았다. `mgi_symbol` 컬럼명은 문자 그대로 유지했다(copykat 본문이 이 이름을
-직접 참조하므로 rat symbol을 담되 컬럼명을 바꾸면 깨진다).
+The hg20-only steps (HLA/cyclegene removal, 220kb bin conversion) are untouched — they
+are already gated to `genome=="hg20"`. The `mgi_symbol` column name is kept verbatim
+(the copykat body references this name directly, so it holds rat symbols but the column
+name must not change or the code breaks).
 
-`full.anno.rn7` 스키마: `abspos, chromosome_name(정수 1–20, X=21), start_position,
-end_position, ensembl_gene_id, mgi_symbol(rat symbol), band(NA)`. `abspos`는 실제 누적
-좌표라서 내장 `full.anno.mm10`의 상수-abspos 결함(unique 20/137,030)을 재현하지 않는다.
+`full.anno.rn7` schema: `abspos, chromosome_name (integer 1–20, X=21), start_position,
+end_position, ensembl_gene_id, mgi_symbol (rat symbol), band (NA)`. `abspos` is a real
+cumulative coordinate, so it does not reproduce the constant-abspos defect of the
+bundled `full.anno.mm10` (20 unique of 137,030).
 
-## 실행 순서
+## Execution order
 
-### 이미 완료 (로컬, RDS 불필요)
-- **Phase 0**: `Rscript build_full_anno_rn7.R` → `full.anno.rn7.rds` 생성, 무결성 게이트 통과
-  (25,302 genes / unique abspos 25,268 / 21 labels / min 575 genes per chr).
-- **T1**: 포크 구조 검증 — `annotateGenes.rn7` 정의, `formals(copykat)$genome`, sysdata baking.
-- **T2**: 실제 R 4.2.2 + 실제 deps로 수정 copykat `genome="rn7"` 합성 실행 완주
-  (gene-space `CNA_results.txt`, 리터럴 `aneuploid`/`diploid` 분리 확인).
+### Already done (local, no RDS needed)
+- **Phase 0**: `Rscript build_full_anno_rn7.R` → generates `full.anno.rn7.rds`, passes the integrity gate
+  (25,302 genes / 25,268 unique abspos / 21 labels / min 575 genes per chr).
+- **T1**: fork structure checks — `annotateGenes.rn7` defined, `formals(copykat)$genome`, sysdata baking.
+- **T2**: modified copykat `genome="rn7"` runs to completion on real R 4.2.2 + real deps
+  (gene-space `CNA_results.txt`, literal `aneuploid`/`diploid` separation confirmed).
 
-### 이미지 빌드 (사용자 WSL, 네트워크 1회)
+### Build the image (user's WSL, network once)
 ```bash
 cd rat-copykat
 ./build.sh                 # -> copykat-rn7.sif
 ./validate.sh copykat-rn7.sif
 ```
-빌드는 base 이미지와 CRAN 스냅샷(2023-10-01) 다운로드로 네트워크가 필요하고, 런타임은 오프라인이다.
+The build needs network to download the base image and the CRAN snapshot (2023-10-01); runtime is offline.
 
-### Phase 1 — 큰 머신에서 샘플링 + 데이터 검증 (전송 게이트)
-5.6GB 원본 RDS는 7.6GB 로컬에서 로드 불가하므로, 아래는 **≥32GB(권장 64GB) 머신에서 1회** 수행한다.
-로컬로는 `full.anno.rn7.rds`와 `validate_rat_input.R`를 함께 가져간다.
+### Phase 1 — sampling + data validation on a big machine (transfer gate)
+The 5.6GB source RDS cannot be loaded on a 7.6GB local host, so run the following **once on a
+≥32GB (64GB recommended) machine**. Bring `full.anno.rn7.rds` and `validate_rat_input.R` along.
 
-먼저 알려줄 것: 세포타입 컬럼명 + 정상 라벨, `sample_id` 컬럼명.
-(rownames/Seurat 버전/gene·cell 수는 검증 리포트가 자동 기록)
+Provide first: the cell-type column name + normal labels, and the `sample_id` column name.
+(rownames / Seurat version / gene & cell counts are auto-recorded by the validation report.)
 
 ```r
 library(Seurat); set.seed(1729)
 obj <- readRDS("test.obj_final_add_celltype_scp2711.rds")
 DefaultAssay(obj) <- "RNA"
 ct  <- "<celltype_col>"; smp <- "<sample_id_col>"
-one <- names(sort(table(obj[[smp]][,1]), decreasing=TRUE))[1]   # 샘플 1개
+one <- names(sort(table(obj[[smp]][,1]), decreasing=TRUE))[1]   # one sample
 o1  <- subset(obj, cells = colnames(obj)[obj[[smp]][,1] == one])
-# 세포타입 층화 + depth 하위 제외로 약 500 barcode 선택 (정상 lineage >= 60~100 보장)
-keep <- NULL  # <층화+depth 필터로 약 500 barcode>
+# select ~500 barcodes by cell-type stratification + dropping low-depth cells (ensure normal lineage >= 60~100)
+keep <- NULL  # <~500 barcodes from stratification + depth filter>
 sub  <- subset(o1, cells = keep)
-sub  <- DietSeurat(sub, assays="RNA", dimreducs=NULL, graphs=NULL)  # counts 유지
+sub  <- DietSeurat(sub, assays="RNA", dimreducs=NULL, graphs=NULL)  # keep counts
 sub@meta.data <- sub@meta.data[, c(ct, smp), drop=FALSE]
-saveRDS(sub, "rat_copykat_test_500.rds")                            # 목표 <0.5GB
-writeLines(colnames(sub)[sub@meta.data[[ct]] %in% c("<정상 라벨들>")], "norm_cell_names.txt")
+saveRDS(sub, "rat_copykat_test_500.rds")                            # target <0.5GB
+writeLines(colnames(sub)[sub@meta.data[[ct]] %in% c("<normal labels>")], "norm_cell_names.txt")
 ```
 
-추출 직후 같은 머신에서 검증하고 **PASS일 때만 전송**한다:
+Validate on the same machine right after extraction and **transfer only on PASS**:
 ```bash
 Rscript validate_rat_input.R \
   --input rat_copykat_test_500.rds --anno full.anno.rn7.rds \
   --norm-cells norm_cell_names.txt \
-  --celltype-column <celltype_col> --normal-labels "<정상 라벨들>" \
+  --celltype-column <celltype_col> --normal-labels "<normal labels>" \
   --report input_validation_report.tsv
-# exit 0 = PASS(전송), exit 1 = FAIL(전송 금지)
+# exit 0 = PASS (transfer), exit 1 = FAIL (do not transfer)
 ```
 
-### Phase 2/3 — 로컬 이관 후 실행
-`rat_copykat_test_500.rds` + `norm_cell_names.txt` + `input_validation_report.tsv`만 로컬로 복사
-(원본 5.6GB RDS는 옮기지 않음). 로컬에서 재검증 후 실행:
+### Phase 2/3 — run after transferring locally
+Copy only `rat_copykat_test_500.rds` + `norm_cell_names.txt` + `input_validation_report.tsv`
+locally (do not move the 5.6GB source RDS). Re-validate locally, then run:
 ```bash
-# 로컬 재검증 (전송 손상/재현성)
+# local re-validation (transfer integrity / reproducibility)
 Rscript validate_rat_input.R --input rat_copykat_test_500.rds --anno full.anno.rn7.rds \
   --norm-cells norm_cell_names.txt --report input_validation_report.local.tsv
 
-# 실행 (이미지 안)
+# run (inside the image)
 singularity exec --cleanenv --containall --bind "$PWD":/work copykat-rn7.sif \
   Rscript /work/run_copykat_rat.R \
     --input /work/rat_copykat_test_500.rds \
@@ -152,16 +159,17 @@ singularity exec --cleanenv --containall --bind "$PWD":/work copykat-rn7.sif \
     --norm-cells /work/norm_cell_names.txt \
     --id-type auto --cores 1
 ```
-출력: `rat_copykat_result.rds`(리터럴 클래스 + `interpretation=review_required`),
-`rat_copykat_result.cnv_evidence.tsv`, `rat_copykat_result_rn7_run/`(heatmap PDF 등).
+Output: `rat_copykat_result.rds` (literal classes + `interpretation=review_required`),
+`rat_copykat_result.cnv_evidence.tsv`, and `rat_copykat_result_rn7_run/` (heatmap PDF, etc.).
 
-## 재검토가 필요한 실행 파라미터 (실데이터 확보 후)
-- `ngene.chr`: rat은 상염색체 20 + X = 21 라벨 → human(23)·mouse(20)과 필터 강도가 다름
-- `LOW.DR`, `UP.DR`: rat 데이터 depth/품질에 좌우
-- `norm.cell.names` 대 자동 baseline: 정상 세포가 부족하면 자동 baseline이 불안정
+## Execution parameters to revisit (after real data is available)
+- `ngene.chr`: rat has 20 autosomes + X = 21 labels → the filter strength differs from human (23) / mouse (20)
+- `LOW.DR`, `UP.DR`: depend on the depth/quality of the rat data
+- `norm.cell.names` vs automatic baseline: the auto baseline is unstable when normal cells are scarce
 
-## 참고: 이 환경에서의 빌드/실행
-- system R은 4.5.0이고 CopyKAT deps가 없어, T1/T2는 기존 Rocky9 SIF에서 추출한 **R 4.2.2 + deps**로
-  실제 실행했다(faithful target R).
-- 기존 SIF는 이 exec 샌드박스에서 `/dev/fuse` 부재·setuid starter 소유권 문제로 마운트 실패한다
-  (샌드박스 아티팩트). 새 이미지의 실제 빌드/실행은 사용자 WSL에서 `build.sh`/`validate.sh`로 검증할 것.
+See [`docs/TUNING.md`](docs/TUNING.md) — these are all call-time arguments of `copykat()`, so
+changing them does **not** require rebuilding the fork/image.
+
+## Note: building/running in this environment
+- The system R is 4.5.0 without CopyKAT deps, so T1/T2 were actually run with **R 4.2.2 + deps** extracted from the existing Rocky9 SIF (a faithful target R).
+- The existing SIF fails to mount in this exec sandbox due to a missing `/dev/fuse` and setuid-starter ownership (sandbox artifacts). Validate the real build/run of the new image in the user's WSL with `build.sh`/`validate.sh`.
