@@ -9,6 +9,47 @@ CopyKAT을 rat(*Rattus norvegicus*, **mRatBN7.2**) scRNA-seq에 실제로 돌리
 > 저자조차 충분히 검증하지 않은 mouse 코드 경로를 타므로, DNA 레벨 근거
 > (WGS/SNP-array/karyotype) 교차검증 전까지 모든 결과는 `review_required`다.
 
+## 무엇을 · 어떻게 · 무엇이 다른지
+
+### 왜 필요한가 (문제)
+upstream CopyKAT `copykat()`의 `genome` 인자는 `"hg20"`(human)과 `"mm10"`(mouse) **두 값만**
+분기하고 `else`가 없다. rat 값을 그대로 넣으면 어느 분기에도 걸리지 않아 `anno.mat`이
+만들어지지 않고 다음 줄에서 곧바로 죽는다. rat scRNA-seq에 CopyKAT을 쓰려면 코드 경로 자체가
+없었다.
+
+### 무엇을 했나 (접근)
+처음부터 rat 전용 220kb bin 좌표계를 새로 만드는 대신, **mouse(mm10) 다운스트림 경로를 그대로
+재사용**했다. mm10 경로는 220kb bin 변환 없이 gene-space로 결과를 내는 구조라, rat annotation
+테이블 하나만 주입하면 되기 때문이다. 그래서 `genome="rn7"`(rat mRatBN7.2)이 mm10과 동일한
+gene-space 블록을 타도록 최소 변경만 했다.
+
+### 어떻게 했나 (구현)
+1. mRatBN7.2 GTF에서 CopyKAT 스키마(7컬럼) rat annotation `full.anno.rn7`을 생성.
+2. `copykat()`에 `genome=="rn7"` 분기와 `annotateGenes.rn7()`를 추가하고, mm10 gene-space 블록을 rn7도 통과하도록 한 줄 확장.
+3. `full.anno.rn7`을 패키지 `R/sysdata.rda`에 baking → 런타임에 GTF·gene order 파일 불필요.
+4. copykat 전용 경량 이미지(`rocker/r-ver:4.2.2`)로 패키징하고, 합성 데이터·실데이터로 실행 검증.
+
+### upstream과 무엇이 다른가
+
+| 항목 | upstream copykat 1.1.0 | 이 포크 (rn7) |
+| --- | --- | --- |
+| 지원 종 | human(hg20), mouse(mm10) | **+ rat(rn7, mRatBN7.2)** |
+| `genome` 미지원 값 | `else` 없음 → 에러로 죽음 | rn7 분기 추가 |
+| rat annotation | 없음 | `full.anno.rn7` 패키지에 baked |
+| annotation 함수 | `annotateGenes.hg20/.mm10` | `+ annotateGenes.rn7()` |
+| rat 출력 단위 | (불가) | gene-space (`CNA_results.txt`, mm10과 동일) |
+| hg20 전용 단계 | 변경 없음 | **변경 없음** (HLA/cyclegene 제거·220kb bin은 hg20 게이트라 손대지 않음) |
+| 알고리즘 로직 | — | **변경 없음** (필터·smoothing·baseline·MCMC segmentation 원본 그대로) |
+
+> 코드 변경은 정확히 **3곳(+데이터 1개)** 뿐이다. 전체 diff와 복원한 원본은
+> [`docs/MODIFICATIONS.md`](docs/MODIFICATIONS.md), [`docs/copykat_rn7.patch`](docs/copykat_rn7.patch),
+> [`docs/original_copykat_b795ff7.R`](docs/original_copykat_b795ff7.R) 참조.
+
+### 검증 상태 (실행으로 확인됨)
+- **빌드**: `copykat-rn7.sif` 빌드 성공, 인이미지 rn7 체크 + `%test` 합성 실행 PASS, 오프라인(`--network none`) 실행 PASS.
+- **T2 합성**: 실제 R 4.2.2 + 실제 deps로 `copykat(genome="rn7")` 완주, gene-space 출력·리터럴 클래스 확인.
+- **실데이터**: rat 310셀(폐, epithelial)에서 완주 — 정상 baseline(macrophage)은 대부분 diploid, epithelial은 aneuploid 비율 상승. 결과는 `review_required`.
+
 ## 입력 계약 (copykat 1.1.0 소스로 확정)
 CopyKAT은 세포/유전자 필터를 **양성 카운트 검출(`sum(x>0)`)** 로 하고, 내부에서
 `log(sqrt(x)+sqrt(x+1))` 변환·중심화·dlm 스무딩을 **직접** 수행한다. 따라서 입력은
