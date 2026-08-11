@@ -28,7 +28,8 @@ From: rocker/r-ver:4.2.2
     export LC_ALL=C.UTF-8
 
 %post
-    set -euxo pipefail
+    # rocker/r-ver base uses dash for %post; avoid bashisms like `pipefail`.
+    set -eux
     umask 022
 
     # Pin to the same CRAN snapshot date used by the existing Rocky9 CNV image.
