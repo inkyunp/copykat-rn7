@@ -74,7 +74,7 @@ Therefore the input must be **raw integer UMI counts, genes × cells**.
 | `copykat-rn7.def` | Lightweight Singularity definition (`rocker/r-ver:4.2.2`, copykat-only) |
 | `build.sh` / `validate.sh` | Build the image (fakeroot/network once) / unprivileged offline validation |
 | `validate_rat_input.R` | **Data-validation gate** (5 input-contract checks). Shared by big machine / local |
-| `run_copykat_rat.R` | Runner: extract RNA counts → `copykat(..., genome="rn7")` → save candidate evidence |
+| `run_copykat_rat.R` | Runner: extract RNA counts → `copykat(..., genome=<hg20\|mm10\|rn7>)` → save candidate evidence (default `rn7`, select via `--genome`) |
 | `run_copykat.R` | Base-R runner mirroring the inferCNV pipeline (no Seurat in the image; direct slot access) |
 | `tests/t2_synthetic_rn7.R` | Synthetic smoke test (no RDS needed) |
 
@@ -161,6 +161,40 @@ singularity exec --cleanenv --containall --bind "$PWD":/work copykat-rn7.sif \
 ```
 Output: `rat_copykat_result.rds` (literal classes + `interpretation=review_required`),
 `rat_copykat_result.cnv_evidence.tsv`, and `rat_copykat_result_rn7_run/` (heatmap PDF, etc.).
+
+## Running human / mouse / rat (three genomes)
+
+The same fork/image supports three species. `copykat()` selects the gene-space by
+its `genome` argument, and the runner exposes it via `--genome` (default `rn7`):
+
+| species | `--genome` | `id.type="S"` matches | annotation object |
+| --- | --- | --- | --- |
+| human | `hg20` | HGNC symbols (`hgnc_symbol`) | `full.anno` |
+| mouse | `mm10` | MGI symbols (`mgi_symbol`) | `full.anno.mm10` |
+| rat | `rn7` | rat symbols (`mgi_symbol`) | `full.anno.rn7` |
+
+`--id-type auto` picks S vs E by counting how many input row names match each
+column of the genome's annotation table, so it is genome-aware.
+
+```bash
+# human
+singularity exec --cleanenv --containall --bind "$PWD":/work copykat-rn7.sif \
+  Rscript /work/run_copykat_rat.R --input /work/human.rds --output /work/out_human \
+    --genome hg20 --id-type auto --cores 1
+# mouse
+singularity exec --cleanenv --containall --bind "$PWD":/work copykat-rn7.sif \
+  Rscript /work/run_copykat_rat.R --input /work/mouse.rds --output /work/out_mouse \
+    --genome mm10 --id-type auto --cores 1
+# rat (default)
+singularity exec --cleanenv --containall --bind "$PWD":/work copykat-rn7.sif \
+  Rscript /work/run_copykat_rat.R --input /work/rat.rds --output /work/out_rat \
+    --genome rn7 --id-type auto --cores 1
+```
+
+Output artifacts land in `<output>_<genome>_run/` (e.g. `out_human_hg20_run/`).
+All three genomes have been run end to end inside the image (synthetic 60-cell
+smoke test: prediction/CNAmat/hclustering returned, gene-space `CNA_results.txt`
+written, literal `aneuploid`/`diploid` preserved). Results stay `review_required`.
 
 ## Execution parameters to revisit (after real data is available)
 - `ngene.chr`: rat has 20 autosomes + X = 21 labels → the filter strength differs from human (23) / mouse (20)
