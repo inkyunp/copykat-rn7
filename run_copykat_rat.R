@@ -5,7 +5,7 @@
 # Records candidate CNV evidence only; it never assigns a final malignant/normal
 # diagnosis (results remain review_required).
 #
-# The input contract is enforced by validate_rat_input.R; this runner also
+# The runner enforces the raw-integer-count contract inline, and also
 # re-derives id.type and (optionally) known-normal barcodes.
 #
 # Usage (inside the copykat-rn7 image):
@@ -109,7 +109,7 @@ ex <- extract_counts(obj, opt$assay)
 counts <- as.matrix(ex$counts)
 storage.mode(counts) <- "numeric"
 if (any(counts < 0) || mean(abs(counts - round(counts)) < 1e-8) < 0.999)
-  stop("input does not look like raw integer counts; run validate_rat_input.R first")
+  stop("input does not look like raw integer counts (expected genes x cells raw UMI)")
 message(sprintf("[run] counts: %d genes x %d cells", nrow(counts), ncol(counts)))
 
 # id.type

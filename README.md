@@ -1,8 +1,8 @@
 # CopyKAT multi-species fork (hg20 / mm10 / rn7)
 
-A minimal fork of [navinlabcode/copykat](https://github.com/navinlabcode/copykat)
+A minimal runtime fork of [navinlabcode/copykat](https://github.com/navinlabcode/copykat)
 (1.1.0, commit `b795ff7`) that adds a rat (*Rattus norvegicus*, **mRatBN7.2**)
-gene-space path via `genome="rn7"`, so the same tool runs on **human, mouse, and rat**.
+gene-space path via `genome="rn7"`, so the same package runs on **human, mouse, and rat**.
 
 > Results are **candidate CNV evidence**, not a malignant/normal diagnosis
 > (`review_required`). rat/mouse share the gene-space path; cross-check with
@@ -10,14 +10,22 @@ gene-space path via `genome="rn7"`, so the same tool runs on **human, mouse, and
 
 ## What changed vs upstream
 
-3 source edits + 1 data object (`full.anno.rn7`, baked into `R/sysdata.rda`).
-See [`docs/MODIFICATIONS.md`](docs/MODIFICATIONS.md) and [`docs/copykat_rn7.patch`](docs/copykat_rn7.patch).
+3 source edits + 1 data object, all inside `copykat-rn7/`:
 
 1. `copykat()` annotation branch: added `else if(genome=="rn7") annotateGenes.rn7(...)`.
 2. gene-space block: `if(genome=="mm10")` → `if(genome=="mm10" || genome=="rn7")`.
 3. new `annotateGenes.rn7()` (copy of `annotateGenes.mm10()`, default `full.anno=full.anno.rn7`).
+4. `full.anno.rn7` (mRatBN7.2) baked into `R/sysdata.rda` — no GTF needed at runtime.
 
 hg20-only steps (HLA/cell-cycle removal, 220kb bins) are untouched.
+
+## Install
+
+```bash
+R CMD INSTALL copykat-rn7
+```
+
+Runtime deps: `parallelDist`, `dlm`, `gplots`, `RColorBrewer`, `mixtools`, `cluster`, `MCMCpack`.
 
 ## Input contract
 
@@ -36,9 +44,8 @@ res <- copykat(rawmat = counts, id.type = "S", genome = "hg20",  # or mm10 / rn7
 Or via the runner (`--genome`, default `rn7`):
 
 ```bash
-singularity exec --cleanenv --containall --bind "$PWD":/work copykat-rn7.sif \
-  Rscript /work/run_copykat_rat.R --input /work/in.rds --output /work/out \
-    --genome hg20 --id-type auto --cores 1     # hg20 | mm10 | rn7
+Rscript run_copykat_rat.R --input in.rds --output out \
+  --genome hg20 --id-type auto --cores 1     # hg20 | mm10 | rn7
 ```
 
 | species | `--genome` | `id.type="S"` symbols | annotation |
@@ -49,30 +56,13 @@ singularity exec --cleanenv --containall --bind "$PWD":/work copykat-rn7.sif \
 
 Output: `<output>.rds`, `<output>.cnv_evidence.tsv`, `<output>_<genome>_run/`.
 
-## Build
-
-```bash
-./build.sh                    # -> copykat-rn7.sif (needs network once)
-./validate.sh copykat-rn7.sif # offline validation
-```
-
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `copykat-rn7/` | Fork source (baked `full.anno.rn7`) |
-| `copykat-rn7.def` / `build.sh` / `validate.sh` | Image build + validation |
-| `build_full_anno_rn7.R` | Build `full.anno.rn7` from `../genes.gtf` (mRatBN7.2) |
-| `validate_rat_input.R` | Input-contract gate |
+| `copykat-rn7/` | Fork package: `R/copykat.R` + `R/sysdata.rda` (three species baked) |
 | `run_copykat_rat.R` | Runner (RNA counts → `copykat(genome=…)` → candidate evidence) |
-| `run_copykat.R` | Base-R runner (no Seurat in image) |
-| `tests/` | Synthetic smoke tests |
-
-## Validation
-
-All three genomes run end-to-end in-image on a synthetic smoke test
-(prediction/CNAmat/hclustering returned, gene-space `CNA_results.txt` written,
-literal `aneuploid`/`diploid` preserved). Results stay `review_required`.
+| `run_copykat.R` | Base-R runner (direct Seurat slot access, no Seurat dependency) |
 
 ## License
 

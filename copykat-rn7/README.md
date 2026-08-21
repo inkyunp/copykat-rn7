@@ -8,8 +8,7 @@ reusing the mouse (mm10) downstream branch with a rat annotation table
 
 ## What changed vs upstream
 
-Exactly three source edits plus one data object — see [`../docs/MODIFICATIONS.md`](../docs/MODIFICATIONS.md)
-and [`../docs/copykat_rn7.patch`](../docs/copykat_rn7.patch):
+Exactly three source edits plus one data object:
 
 1. `copykat()` annotation branch: added `else if(genome=="rn7") annotateGenes.rn7(...)`.
 2. `copykat()` gene-space block: `if(genome=="mm10")` -> `if(genome=="mm10" || genome=="rn7")`.
