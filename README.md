@@ -10,14 +10,18 @@ gene-space path via `genome="rn7"`, so the same package runs on **human, mouse, 
 
 ## What changed vs upstream
 
-3 source edits + 1 data object, all inside `copykat-rn7/`:
+The package keeps the **exact upstream b795ff7 file layout** (per-function R
+scripts, `data/`, `man/`). Every original file is byte-for-byte identical; only
+`copykat.R` gains the rn7 branch, plus one new file and one new data object:
 
 1. `copykat()` annotation branch: added `else if(genome=="rn7") annotateGenes.rn7(...)`.
 2. gene-space block: `if(genome=="mm10")` → `if(genome=="mm10" || genome=="rn7")`.
-3. new `annotateGenes.rn7()` (copy of `annotateGenes.mm10()`, default `full.anno=full.anno.rn7`).
-4. `full.anno.rn7` (mRatBN7.2) baked into `R/sysdata.rda` — no GTF needed at runtime.
+3. new `R/annotateGenes.rn7.R` (copy of `annotateGenes.mm10()`, default `full.anno=full.anno.rn7`) + `man/annotateGenes.rn7.Rd` + NAMESPACE export.
+4. `full.anno.rn7` (mRatBN7.2) added to `data/sysdata.rda` — no GTF needed at runtime.
 
 hg20-only steps (HLA/cell-cycle removal, 220kb bins) are untouched.
+All other functions (hg20 human, mm10 mouse, MCMC, baselines, heatmap) are the
+unmodified upstream originals.
 
 ## Install
 
@@ -60,7 +64,7 @@ Output: `<output>.rds`, `<output>.cnv_evidence.tsv`, `<output>_<genome>_run/`.
 
 | File | Purpose |
 | --- | --- |
-| `copykat-rn7/` | Fork package: `R/copykat.R` + `R/sysdata.rda` (three species baked) |
+| `copykat-rn7/` | Fork package (upstream b795ff7 layout): `R/*.R`, `data/sysdata.rda` (three species), `man/`. Only `copykat.R` edited + `annotateGenes.rn7.R` added |
 | `run_copykat_rat.R` | Runner (RNA counts → `copykat(genome=…)` → candidate evidence) |
 | `run_copykat.R` | Base-R runner (direct Seurat slot access, no Seurat dependency) |
 
